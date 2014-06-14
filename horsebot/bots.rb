@@ -31,17 +31,18 @@ class HorseBot
     @model = nil
     @reply_pool = ReplyPool.new
 
+    config = JSON.parse(File.read('config.json'), symbolize_names: true)
+    # app keys
+    bot.consumer_key = config[:consumer_key]
+    bot.consumer_secret = config[:consumer_secret]
+    # oauth keys for the account - try https://github.com/marcel/twurl
+    bot.oauth_token = config[:oauth_token]
+    bot.oauth_token_secret = config[:oauth_token_secret]
+
     bot.on_startup do
-      config = JSON.parse(File.read('config.json'), symbolize_names: true)
-
-      # app keys
-      bot.consumer_key = config[:consumer_key]
-      bot.consumer_secret = config[:consumer_secret]
-      # oauth keys for the account
-      bot.oauth_token = config[:oauth_token]
-      bot.oauth_token_secret = config[:oauth_token_secret]
-
       @model = Ebooks::Model.load("model/#{modelname}.model")
+      @top100 = @model.keywords.top(100).map(&:to_s).map(&:downcase)
+      bot.log "Keywords: #{@top100}"
       bot.log "Testing: #{@model.make_statement 80}"
     end
 
@@ -87,9 +88,18 @@ class HorseBot
     bot.scheduler.every '3m' do
       # tweet something
       if rand(9) == 0
-        bot.tweet(@model.make_statement(140))
+        toot
       end
     end
+
+    bot.scheduler.schedule '5s' do
+      bot.log "Boop boop"
+      #toot
+    end
+  end
+
+  def toot
+    @bot.tweet @model.make_statement(140)
   end
 end
 
