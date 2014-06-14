@@ -1,26 +1,83 @@
+#!/usr/bin/env python
+# coding: utf-8
 import codecs
 import json
+import re
 import sys
-from queneau import WordAssembler
+import unicodedata
 from random import choice, randint, random
+from string import uppercase as UPPERCASE
+
+from queneau import WordAssembler
+
 
 CORPUS_FILENAME = 'corpus.json'
 ICONS = u'\u26BD'
 
-def format_name(string):
-    return ' '.join(w.capitalize() for w in string.split())
+VOWELS = u'aeiouáéíóúàèìòùåøæœäëïöüąęâêîôûãẽĩõũ'
+STRIP_UNICODE = {
+    u'æ': 'ae',
+    u'œ': 'oe',
+    u'ł': 'l',
+    u'ø': 'o',
+    u'ß': 'ss',
+    u'þ': 'th',
+    u'ð': 'dh',
+}
+
+
+class FootbotAssembler(WordAssembler):
+
+    def __init__(self, initial=[]):
+        vowels = choice((VOWELS, VOWELS + 'y'))
+        self.sequence_of_vowels = re.compile("([%s]+)" % vowels, re.I)
+        self.vowels = vowels + vowels.upper()
+        super(FootbotAssembler, self).__init__(initial)
+
+
+def flip():
+    return bool(randint(0, 1))
+
+def strip_unicode(string):
+    for s, r in STRIP_UNICODE.items():
+        string = string.replace(s, r)
+    return ''.join(c for c in unicodedata.normalize('NFD', string)
+                   if unicodedata.category(c) != 'Mn')
+
+def random_fc():
+    return choice(UPPERCASE) + choice(UPPERCASE)
+
+def add_random_fc(string):
+    r, fc = randint(1, 10), None
+    if r <= 2:
+        fc = 'FC'
+    elif r == 3:
+        fc = random_fc()
+    if fc:
+        return '%s %s' % choice(( (string, fc), (fc, string) ))
+    else:
+        return string
+
+def format_name(team, random_fc=True, diacritics=True):
+    if not diacritics:
+        team = strip_unicode(team)
+    team = ' '.join(w.capitalize() for w in team.split())
+    if random_fc:
+        team = add_random_fc(team)
+    return team
 
 def random_score():
-    return int(random() * random() * 5)
+    multiplier = 9 if random() < 0.02 else 5
+    return int(random() * random() * multiplier)
 
 def random_team(assembler):
     team = ''
     for _ in range(10):
-        length = randint(3, 9)
+        length = randint(3, 8)
         team = assembler.assemble_word(length=length)
         if team and all(len(w) >= 3 for w in team.split()):
             break
-    return format_name(team)
+    return format_name(team, diacritics=flip())
 
 def random_game(assembler):
     team1, team2 = random_team(assembler), random_team(assembler)
@@ -41,8 +98,9 @@ def footbot(games=1):
         sys.stderr.write('Run %s first.\n' % 'build.py')
         return
 
-    corpus = WordAssembler(words)
-    return ['%s %s' % (choice(ICONS), random_game(corpus))
+    corpus = FootbotAssembler(words)
+
+    return ['%s %s #WorldCup #WorldCup2014' % (choice(ICONS), random_game(corpus))
             for _ in range(games)]
 
 def main():
