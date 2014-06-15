@@ -128,7 +128,8 @@ class HorseBot
   end
 
   def toot
-    @bot.tweet @model.make_statement(140)
+    text = @model.make_statement(140)
+    @bot.tweet(text) unless @model.verbatim? text
   end
 
   def filter_reply_prefix(prefix)
@@ -150,7 +151,7 @@ class HorseBot
         @bot.log "Abandoning conversation on a whim"
       else
         text = @model.make_response(tweet[:text], length)
-        @bot.reply(tweet, prefix + text)
+        @bot.reply(tweet, prefix + text) unless @model.verbatim? text
       end
     else
       @bot.log "#{username} not in followers"
