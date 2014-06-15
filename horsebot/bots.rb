@@ -6,22 +6,28 @@
 require 'json'
 require 'twitter_ebooks'
 
+DELAY = 1..40
+
 class ReplyPool
   def initialize
     @replies = Hash.new
   end
 
   def add(tweet, meta)
-    username = tweet.user[:screen_name]
+    username = tweet[:user][:screen_name].downcase
     @replies[username] = [tweet, meta]
   end
 
-  def delete_any
-    username = @replies.keys.sample
-    unless username.nil?
+  def take(tweet)
+    unless tweet.nil?
+      username = tweet[:user][:screen_name].downcase
       reply = @replies.delete(username)
-      yield reply  unless reply.nil?
+      yield reply unless reply.nil?
     end
+  end
+
+  def size
+    @replies.size
   end
 end
 
@@ -47,69 +53,52 @@ class HorseBot
       load_model :force => true
     end
 
-    bot.on_message do |dm|
-      # bot.reply(dm, "secret secrets")
+    bot.scheduler.every '1h' do
+      load_model
     end
 
     bot.on_follow do |user|
-      # follow user back after a delay
-      delay = (rand * 60).to_i.to_s + 's'
-      username = user[:screen_name].downcase
-      next if @following.include? username
-      bot.log "Will follow #{username} in #{delay}"
-      bot.scheduler.schedule delay, :mutex => 'replies' do
-        bot.follow username
-        @followers << username
+      bot.delay DELAY do
+        username = user[:screen_name]
+        next if @following.include? username
+        bot.scheduler.schedule '0s', :mutex => 'replies' do
+          bot.follow(username)
+          @followers << username
+        end
       end
     end
 
     bot.on_mention do |tweet, meta|
-      # add mention to the reply pool, to be replied to later
-      bot.scheduler.schedule '0s', :mutex => 'replies' do
-        username = tweet.user[:screen_name]
-        bot.log "Scheduling reply to #{username} (from mentions)"
-        @reply_pool.add tweet, meta
-      end
+      reply(tweet, meta)
     end
 
     bot.on_timeline do |tweet, meta|
       text = tweet[:text]
-      username = tweet[:user].screen_name.downcase
-      next if tweet[:retweeted_status] or tweet[:text].start_with?("RT")
+      rt = tweet[:retweeted_status]
+      next if rt.nil? and text.start_with?("RT ")
       next unless interesting? text
+      bot.log "#{tweet[:user][:screen_name]} said: #{text}"
 
-      bot.log "#{username} said: #{text}"
       if very_interesting? text
-        bot.twitter.favorite(tweet[:id])
-        bot.log "Fav'd #{username}!"
-      end
-
-      next unless rand < 0.1
-      bot.scheduler.schedule '0s', :mutex => 'follow' do
-        bot.log "Scheduling reply to #{username} (from timeline)"
-        respond(tweet, meta)
+        action = reply(tweet, meta)   unless rand > 0.5
+        action = retweet(tweet)       unless action or rand > 0.5
+        action = favorite(tweet)      unless action
       end
     end
 
-    bot.scheduler.every '80s', :mutex => 'replies' do
-      # reply to a random mention or tweet of interest
-      @reply_pool.delete_any do |tweet, meta|
-        respond(tweet, meta)
-      end
+    bot.on_message do |dm|
+      # bot.reply(dm, "secret secrets")
     end
 
     bot.scheduler.every '3m', :first_in => '5s' do
-      # tweet something
-      if rand(9) == 0
-        toot
-      end
+      toot if rand(20) == 0
     end
 
-    bot.scheduler.every '3h', :first_in => '1s', :mutex => 'replies' do
+    bot.scheduler.every '1h', :first_in => '1s', :mutex => 'replies' do
       followers = bot.twitter.followers.map { |x| x[:screen_name].downcase }
       following = bot.twitter.following.map { |x| x[:screen_name].downcase }
-      to_follow = followers - following
-      to_unfollow = following - followers
+      to_follow = (followers - following).sample 10
+      to_unfollow = (following - followers).sample 10
       if to_follow.any?
         bot.log "Following #{to_follow}"
         bot.twitter.follow(to_follow)
@@ -121,15 +110,6 @@ class HorseBot
       @followers = followers
       @following = following - to_unfollow
       bot.log "Followers: #{followers.size}"
-    end
-
-    bot.scheduler.every '1h' do
-      load_model
-    end
-
-    bot.scheduler.schedule '1s' do
-      bot.log ["Beep boop", "Blerp blerp"].sample
-      #toot
     end
   end
 
@@ -156,7 +136,8 @@ class HorseBot
     prefix
   end
 
-  def respond(tweet, meta)
+  def reply_now(tweet, meta)
+    # this should be called from the scheduler with :mutex => 'replies'
     username = tweet.user[:screen_name]
     if @followers.include? username
       prefix = filter_reply_prefix(meta[:reply_prefix])
@@ -172,9 +153,45 @@ class HorseBot
         @bot.reply(tweet, prefix + text)
       end
     else
-      @bot.log "#{username} unfollowed :'( :'("
-      @bot.twitter.unfollow(username)
+      @bot.log "#{username} not in followers"
+      #@bot.twitter.unfollow(username)
     end
+  end
+
+  def reply(tweet, meta)
+    @bot.log "Scheduling reply to @#{tweet[:user][:screen_name]}: #{tweet[:text]}"
+    @bot.scheduler.schedule '0s', :mutex => 'replies' do
+      # add the reply to the pool.
+      # this will replace any other pending reply from the same user
+      @reply_pool.add tweet, meta
+      @bot.log "Replies in pool: #{@reply_pool.size}"
+    end
+    @bot.delay DELAY do
+      @bot.scheduler.schedule '0s', :mutex => 'replies' do
+        # remove the tweet from the pool (or whatever tweet may have replaced it)
+        @reply_pool.take(tweet) do |tweet, meta|
+          reply_now(tweet, meta)
+        end
+      end
+    end
+    :reply
+  end
+
+  def favorite(tweet)
+    @bot.log "Will fav @#{tweet[:user][:screen_name]}: #{tweet[:text]}"
+    @bot.delay DELAY do
+      @bot.twitter.favorite tweet[:id]
+    end
+    :favorite
+  end
+
+  def retweet(tweet)
+    return false if tweet[:user][:screen_name] == 'inky'
+    @bot.log "Will retweet @#{tweet[:user][:screen_name]}: #{tweet[:text]}"
+    @bot.delay DELAY do
+      @bot.twitter.retweet tweet[:id]
+    end
+    :retweet
   end
 
   def interesting?(text)
@@ -184,7 +201,7 @@ class HorseBot
 
   def very_interesting?(text)
     tokens = Ebooks::NLP.tokenize(text.downcase)
-    tokens.select{ |t| @top50.include? t }.uniq.count > 1
+    tokens.select{ |t| @top100.include? t }.uniq.count > 1
   end
 end
 
