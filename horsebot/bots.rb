@@ -6,7 +6,13 @@
 require 'json'
 require 'twitter_ebooks'
 
-DELAY = 1..40
+require_relative 'inky_glitch'
+
+AUTH_FILENAME = 'auth.json'
+CONFIG_FILENAME = 'config.json'
+
+DELAY = 1..20
+ADMIN_USERNAME = 'inky'
 
 class ReplyPool
   def initialize
@@ -34,26 +40,34 @@ end
 class HorseBot
   def initialize(bot, modelname)
     @bot = bot
-    @model = nil
-    @model_filename = "model/#{modelname}.model"
-    @model_mtime = 0
+    @mtime = {}
     @following = []
     @followers = []
     @reply_pool = ReplyPool.new
 
-    config = JSON.parse(File.read('config.json'), symbolize_names: true)
+    @config = nil
+    @boring_keywords = []
+    @always_follow = []
+    @hashtags = []
+
+    @model = nil
+    @model_filename = "model/#{modelname}.model"
+
+    auth = JSON.parse(File.read(AUTH_FILENAME), symbolize_names: true)
     # app keys
-    bot.consumer_key = config[:consumer_key]
-    bot.consumer_secret = config[:consumer_secret]
+    bot.consumer_key = auth[:consumer_key]
+    bot.consumer_secret = auth[:consumer_secret]
     # oauth keys for the account - try https://github.com/marcel/twurl
-    bot.oauth_token = config[:oauth_token]
-    bot.oauth_token_secret = config[:oauth_token_secret]
+    bot.oauth_token = auth[:oauth_token]
+    bot.oauth_token_secret = auth[:oauth_token_secret]
 
     bot.on_startup do
+      load_config :force => true
       load_model :force => true
     end
 
     bot.scheduler.every '1h' do
+      load_config
       load_model
     end
 
@@ -76,18 +90,32 @@ class HorseBot
       text = tweet[:text]
       rt = tweet[:retweeted_status]
       next if rt.nil? and text.start_with?("RT ")
-      next unless interesting? text
+      #next unless interesting? text
+      next unless very_interesting? text
       bot.log "#{tweet[:user][:screen_name]} said: #{text}"
 
-      if very_interesting? text
-        action = reply(tweet, meta)   unless rand > 0.5
-        action = retweet(tweet)       unless action or rand > 0.5
-        action = favorite(tweet)      unless action
-      end
+      will_rt = retweet(tweet)          unless rand > 0.3
+      will_fav = favorite(tweet)        unless will_rt
+      will_reply = reply(tweet, meta)   unless rand > 0.3
     end
 
     bot.on_message do |dm|
-      # bot.reply(dm, "secret secrets")
+      next unless ADMIN_USERNAME and dm[:sender][:screen_name] == ADMIN_USERNAME
+      tokens = dm[:text].split
+      cmd = tokens[0].to_sym
+      if cmd == :tweet
+        toot
+      #elsif cmd == :delete
+      #  tweet_id = tokens[1].to_i
+      #  bot.twitter.destroy_status(tweet_id) if tweet_id > 0
+      elsif cmd == :reload
+        load_config :verbose => true
+        load_model :verbose => true
+      elsif cmd == :ping
+        bot.reply(dm, 'pong')
+      else
+        bot.log "Unrecognised command: #{cmd}"
+      end
     end
 
     bot.scheduler.every '3m', :first_in => '5s' do
@@ -96,6 +124,7 @@ class HorseBot
 
     bot.scheduler.every '1h', :first_in => '1s', :mutex => 'replies' do
       followers = bot.twitter.followers.map { |x| x[:screen_name].downcase }
+      followers |= @always_follow
       following = bot.twitter.following.map { |x| x[:screen_name].downcase }
       to_follow = (followers - following).sample 10
       to_unfollow = (following - followers).sample 10
@@ -107,28 +136,52 @@ class HorseBot
         bot.log "Unfollowing #{to_unfollow}"
         bot.twitter.unfollow(to_unfollow)  unless to_unfollow.empty?
       end
+      bot.log("Followers: #{followers.size}") unless followers.size == @followers.size
       @followers = followers
       @following = following - to_unfollow
-      bot.log "Followers: #{followers.size}"
     end
+  end
+
+  def load_config(kwargs={})
+    mtime = File.mtime(CONFIG_FILENAME).to_i
+    return unless kwargs[:force] or mtime != @mtime[:config]
+    @bot.log "Loading #{CONFIG_FILENAME}"
+    @config = JSON.parse(File.read(CONFIG_FILENAME), symbolize_names: true)
+    @boring_keywords = @config[:boring_keywords].map(&:to_s).map(&:downcase)
+    @always_follow = @config[:always_follow].map(&:to_s).map(&:downcase)
+    @hashtags = @config[:hashtags].map(&:to_s)
+    @mtime[:config] = mtime
   end
 
   def load_model(kwargs={})
     mtime = File.mtime(@model_filename).to_i
-    unless kwargs[:force]
-      return if mtime == @model_mtime
+    if kwargs[:force] or mtime != @mtime[:model]
+      @bot.log "Loading #{@model_filename}"
+      @model = Ebooks::Model.load(@model_filename)
+      @top100 = @model.keywords.top(100).map(&:to_s).map(&:downcase).uniq
+      @top50 = @model.keywords.top(50).map(&:to_s).map(&:downcase).uniq
+      @bot.log "Keywords: #{@top100}"
+      @bot.log "Testing: #{glitch(@model.make_statement 80)}"
+      @mtime[:model] = mtime
+    else
+      #@bot.log("File is unchanged: #{@model_filename}") if kwargs[:verbose]
     end
-    @bot.log "Loading #{@model_filename}"
-    @model = Ebooks::Model.load(@model_filename)
-    @top100 = @model.keywords.top(100).map(&:to_s).map(&:downcase)
-    @top50 = @model.keywords.top(50).map(&:to_s).map(&:downcase)
-    @bot.log "Keywords: #{@top100}"
-    @bot.log "Testing: #{@model.make_statement 80}"
-    @model_mtime = mtime
   end
 
   def toot
-    text = @model.make_statement(140)
+    text = nil
+    while text.nil? or text.length > 140
+      @bot.log("Too long; trying another tweet") unless text.nil?
+      hashtags = @hashtags.sample.split.map{|h| " #" + h}.join unless rand > 0.1
+      tweet_len = hashtags ? 130 : (130 - hashtags.length)
+      2.times do
+        text = @model.make_statement tweet_len
+        break unless boring? text
+        @bot.log "Boring: #{text}"
+      end
+      text = glitch text
+      text += hashtags if hashtags
+    end
     @bot.tweet(text) unless @model.verbatim? text
   end
 
@@ -151,6 +204,8 @@ class HorseBot
         @bot.log "Abandoning conversation on a whim"
       else
         text = @model.make_response(tweet[:text], length)
+        text = @model.make_response(tweet[:text], length) if boring? text
+        text = glitch text
         @bot.reply(tweet, prefix + text) unless @model.verbatim? text
       end
     else
@@ -175,7 +230,7 @@ class HorseBot
         end
       end
     end
-    :reply
+    true
   end
 
   def favorite(tweet)
@@ -183,30 +238,39 @@ class HorseBot
     @bot.delay DELAY do
       @bot.twitter.favorite tweet[:id]
     end
-    :favorite
+    true
   end
 
   def retweet(tweet)
-    return false if tweet[:user][:screen_name] == 'inky'
+    return if tweet[:user][:screen_name] == ADMIN_USERNAME
     @bot.log "Will retweet @#{tweet[:user][:screen_name]}: #{tweet[:text]}"
     @bot.delay DELAY do
       @bot.twitter.retweet tweet[:id]
     end
-    :retweet
+    true
+  end
+
+  def boring?(text)
+    tokens = Ebooks::NLP.tokenize(text.downcase.gsub "\u2019", "'")
+    !!(tokens.find { |t| @boring_keywords.include? t })
   end
 
   def interesting?(text)
-    tokens = Ebooks::NLP.tokenize(text.downcase)
+    tokens = Ebooks::NLP.tokenize(text.downcase.gsub "\u2019", "'")
     !!(tokens.find { |t| @top100.include? t })
   end
 
   def very_interesting?(text)
-    tokens = Ebooks::NLP.tokenize(text.downcase)
+    tokens = Ebooks::NLP.tokenize(text.downcase.gsub "\u2019", "'")
     tokens.select{ |t| @top100.include? t }.uniq.count > 1
+  end
+
+  def glitch(text)
+    HorseInky::glitch text
   end
 end
 
 Ebooks::Bot.new("horse_inky") do |bot|
   # make a bot for @horse_inky using the @inky corpus
-  HorseBot.new bot, "inky"
+  HorseBot.new bot, "inky-merged"
 end
