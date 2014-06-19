@@ -170,10 +170,10 @@ class HorseBot
 
   def toot
     text = nil
-    while text.nil? or text.length > 140
+    until text and text.length <= 140
       @bot.log("Too long; trying another tweet") unless text.nil?
       hashtags = @hashtags.sample.split.map{|h| " #" + h}.join unless rand > 0.1
-      tweet_len = hashtags ? 130 : (130 - hashtags.length)
+      tweet_len = hashtags ? 130 - hashtags.length : 130
       2.times do
         text = @model.make_statement tweet_len
         break unless boring? text
