@@ -1,7 +1,7 @@
-footbot
-=======
+footbot.py
+==========
 
-**footbot** generates football scores for @[thematchbot][].
+**footbot.py** generates football scores for @[thematchbot][].
 
 Sample output from *footbot.py*:
 

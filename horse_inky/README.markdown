@@ -1,7 +1,7 @@
-horsebot
-========
+horse\_inky
+===========
 
-**horsebot** is a [twitter\_ebooks][twitter-ebooks] bot for
+**horse\_inky** is a [twitter\_ebooks][twitter-ebooks] bot for
 @[horse\_inky][horse-inky]. It generates pseudo-Markov nonsense based on a
 corpus of tweets by @[inky][].
 
