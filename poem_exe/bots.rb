@@ -9,6 +9,7 @@ AUTH_FILENAME = 'auth.json'
 MAX_LENGTH = 90
 MAX_LINE_LENGTH = 25
 TWEET_CHANCE = 0...7
+MAX_PASSED_TWEETS = 10
 
 module Haiku
   class Bot
@@ -18,6 +19,8 @@ module Haiku
       @model_name = model_name
       @model = nil
       @queneau = nil
+      @top100 = nil
+      @passed_tweets = 0
 
       auth = JSON.parse(File.read(AUTH_FILENAME), symbolize_names: true)
       # app keys
@@ -32,7 +35,8 @@ module Haiku
         if ARGV.include?('tweet') or rand(TWEET_CHANCE) == 0
           tweet_haiku
         else
-          @bot.log "Testing: #{[make_haiku]}"
+          test_haiku = [Haiku::format_haiku(make_haiku(), :single_line => true)]
+          @bot.log "Testing: #{test_haiku}"
         end
       end
 
@@ -41,7 +45,13 @@ module Haiku
       end
 
       bot.scheduler.every '11m' do
-        tweet_haiku if rand(TWEET_CHANCE) == 0
+        if @passed_tweets >= MAX_PASSED_TWEETS or rand(TWEET_CHANCE) == 0
+          tweet_haiku
+          @passed_tweets = 0
+        else
+          @passed_tweets += 1
+          @bot.log("Passed #{@passed_tweets} chances to tweet") if @passed_tweets % 3 == 0
+        end
       end
     end
 
@@ -63,13 +73,15 @@ module Haiku
       if kwargs[:force] or mtime != @mtime[:model]
         @bot.log "Loading #{model_filename}"
         @model = Ebooks::Model.load model_filename
+        @top100 = @model.keywords.top(100).map(&:to_s).map(&:downcase).uniq
+        @bot.log "Top 100 keywords: #{@top100}"
         @mtime[:model] = mtime
       end
     end
 
     def make_haiku
       lines = []
-      3.times do
+      10.times do
         method = [:queneau, :queneau, :ebooks].sample
         lines = []
         if method == :queneau
@@ -79,8 +91,11 @@ module Haiku
           text = @model.make_statement MAX_LENGTH
           next if text.empty? or @model.verbatim? text
           lines = text.split('/').map(&:strip)
-          lines = nil if lines.select {|s| s.length > MAX_LINE_LENGTH}
-          next if lines.nil?
+          if lines.select{ |s| s.length > MAX_LINE_LENGTH }.any?
+            @bot.log "Ebooks haiku lines too long: #{lines}"
+            lines = nil
+            next
+          end
           @bot.log "Ebooks haiku: #{lines}"
         end
         lines.select! { |line| line and not line.empty? }
