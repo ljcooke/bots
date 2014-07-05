@@ -5,19 +5,22 @@ ALT_FORMS = [
   { :pattern => [1, 3] },
   { :pattern => [1, 3, 1, 3] },
   { :pattern => [1, 2, 2, 3] },
+  { :pattern => [1, 2, 3, 1, 3] },
 ]
 
-module Haiku
-  def self.format_haiku(text, kwargs={})
-    poem = text.strip.downcase.gsub /[.]$/, ';'
+module PoemExe
+  def self.format_poem(text, opts={})
+    poem = text.strip.downcase.gsub(/\.{2,}/, "\u2026").gsub(/[.]$/, ';')
     # move some words to the preceding line
-    poem.gsub! /(\w|,|;)\n(among|in|of|on|that|towards?)\s/, "\\1 \\2\n"
-    poem.gsub! /(,|;)\n(i|is)\s/, "\\1 \\2\n"
+    unless rand > 0.5
+      poem.gsub! /(\w|,|;)\n(among|in|of|on|that|towards?)\s/, "\\1 \\2\n"
+      poem.gsub! /(,|;)\n(i|is)\s/, "\\1 \\2\n"
+    end
     # strip punctuation
     poem.gsub! /[;]$/, ''
     poem.gsub! /[;]/, ','
     poem.gsub! /[.,:;]$/, ''
-    poem = poem.split("\n").join(' / ') if kwargs[:single_line]
+    poem = poem.split("\n").join(' / ') if opts[:single_line]
     poem
   end
 
@@ -48,6 +51,37 @@ module Haiku
         lines << line unless line.nil?
       end
       lines
+    end
+  end
+
+  class Poet
+    def initialize(model_name)
+      @model_name = model_name
+      @mtime = {}
+      @queneau = nil
+      load_model :force => true
+    end
+
+    def load_model(opts={})
+      corpus_filename = "corpus/#{@model_name}.json"
+      mtime = File.mtime(corpus_filename)
+      if opts[:force] or mtime != @mtime[:corpus]
+        if @queneau.nil?
+          @queneau = PoemExe::Queneau.new corpus_filename
+        else
+          @queneau.load_corpus
+        end
+        @mtime[:corpus] = mtime
+      end
+    end
+
+    def make_poem(opts={})
+      lines = []
+      10.times do
+        lines = @queneau.sample.select { |line| line and not line.empty? }
+        break if lines and lines.length > 1
+      end
+      PoemExe.format_poem(lines.join("\n"), opts) if lines and lines.any?
     end
   end
 end

@@ -16,7 +16,7 @@ INPUT_GLOB = 'haiku/*.txt'
 OUTPUT_FILENAME = 'corpus/haiku.json'
 
 RE_CONTAINS_URL = re.compile('https?://')
-RE_WEAK_LINE = re.compile(' (and|from|is|of|that|the|with)\\n',
+RE_WEAK_LINE = re.compile(' (and|by|from|is|of|that|the|with)\\n',
                           flags=re.IGNORECASE)
 
 REPLACE = (
@@ -37,11 +37,6 @@ REPLACE = (
 )
 
 output_haiku = []
-
-def line_buckets(lines):
-    lines = list(lines)
-    first, middle, last = tuple(lines[:1]), tuple(lines[1:-1]), tuple(lines[-1:])
-    return first, middle, last
 
 for fn in glob(INPUT_GLOB):
     print 'Reading', fn
