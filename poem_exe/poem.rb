@@ -26,12 +26,7 @@ module PoemExe
 
   class Queneau
     def initialize(corpus_filename)
-      @corpus_filename = corpus_filename
-      load_corpus
-    end
-
-    def load_corpus
-      @tweets = JSON.parse(File.read(@corpus_filename), symbolize_names: true)
+      @tweets = JSON.parse(File.read(corpus_filename), symbolize_names: true)
     end
 
     def sample
@@ -66,11 +61,7 @@ module PoemExe
       corpus_filename = "corpus/#{@model_name}.json"
       mtime = File.mtime(corpus_filename)
       if opts[:force] or mtime != @mtime[:corpus]
-        if @queneau.nil?
-          @queneau = PoemExe::Queneau.new corpus_filename
-        else
-          @queneau.load_corpus
-        end
+        @queneau = PoemExe::Queneau.new corpus_filename
         @mtime[:corpus] = mtime
       end
     end
