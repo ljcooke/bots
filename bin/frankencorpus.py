@@ -17,12 +17,20 @@ import argparse
 import codecs
 import json
 import sys
-from glob import glob
+
+REPLACEMENTS = (
+    # change smart quotes to dumb quotes
+    (u'\u2018', "'"),
+    (u'\u2019', "'"),
+    (u'\u201C', '"'),
+    (u'\u201D', '"'),
+)
 
 class Corpus:
 
-    def __init__(self, filenames):
+    def __init__(self, filenames, lower):
         self.indexed_tweets = {}
+        self.lower = lower
 
         for fn in filenames:
             with codecs.open(fn, encoding='utf-8') as fp:
@@ -31,12 +39,20 @@ class Corpus:
                 print('  %d tweets' % len(tweets))
                 self.add_tweets(tweets)
 
+    def normalize(self, text):
+        if self.lower:
+            text = text.lower()
+        for pattern, replacement in REPLACEMENTS:
+            text = text.replace(pattern, replacement)
+        return text
+
     def add_tweets(self, tweets):
         for tweet in tweets:
             tid = int(tweet['id'])
             assert tid > 0
             assert tid == int(tweet['id_str'])
             if tid not in self.indexed_tweets:
+                tweet['text'] = self.normalize(tweet['text'])
                 self.indexed_tweets[tid] = tweet
 
     def write(self, fp):
@@ -49,15 +65,19 @@ class Corpus:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('filenames', metavar='USER.json', type=str, nargs='+')
-    ap.add_argument('-o', '--outfile', metavar='OUT.json', required=True)
+    ap.add_argument('filenames', metavar='USER.json', type=str, nargs='+',
+                    help='one or more tweet files in JSON format (required)')
+    ap.add_argument('-o', '--outfile', metavar='OUT.json', required=True,
+                    help='output filename (required)')
+    ap.add_argument('--lower', action='store_true',
+                    help='convert tweets to lower case')
     args = ap.parse_args()
 
     if any(not fn.endswith('.json') for fn in args.filenames):
         sys.stderr.write('Filenames must end with .json\n')
         return 1
 
-    corpus = Corpus(args.filenames)
+    corpus = Corpus(args.filenames, lower=args.lower)
     with codecs.open(args.outfile, 'w', encoding='utf-8') as fp:
         print('Writing to %s' % args.outfile)
         corpus.write(fp)
