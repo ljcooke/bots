@@ -1,9 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""
+@everyhaiku by @inky
+2009-12-08, 2014-11-09
+
+Run `python haiku.py` to generate a random haiku.
+
+"""
 import sys
 from random import choice
 
-from tweet import post_tweet
+try:
+    from tweet import post_tweet
+except ImportError:
+    post_tweet = None
 
 KANA_MAP = dict(
     a = u'あかさたなはまやらわ',
@@ -59,7 +69,7 @@ class HaikuGen(object):
 def main():
     gen = HaikuGen()
     haiku = gen.format(gen.haiku())
-    if 'tweet' in sys.argv or '--tweet' in sys.argv:
+    if post_tweet and 'tweet' in sys.argv:
         post_tweet(haiku)
     else:
         print(haiku)
