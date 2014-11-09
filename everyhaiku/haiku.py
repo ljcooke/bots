@@ -4,9 +4,16 @@
 @everyhaiku by @inky
 2009-12-08, 2014-11-09
 
-Run `python haiku.py` to generate a random haiku.
+Usage:
+
+    python haiku.py
+        Generate a haiku.
+
+    python haiku.py json
+        Generate a haiku and print the lines in JSON.
 
 """
+import json
 import sys
 from random import choice
 
@@ -68,11 +75,13 @@ class HaikuGen(object):
 
 def main():
     gen = HaikuGen()
-    haiku = gen.format(gen.haiku())
+    haiku = gen.haiku()
     if post_tweet and 'tweet' in sys.argv:
-        post_tweet(haiku)
+        post_tweet(gen.format(haiku))
+    elif 'json' in sys.argv:
+        print(json.dumps(haiku))
     else:
-        print(haiku)
+        print(gen.format(haiku))
 
 if __name__ == '__main__':
     main()
