@@ -13,7 +13,7 @@ KANA_MAP = dict(
     o = u'おこそとのほもよろを',
 )
 ROMAJI_MAP = dict(
-    a = 'a ka ki ta na ha ma ya ra wa'.split(),
+    a = 'a ka sa ta na ha ma ya ra wa'.split(),
     i = 'i ki shi chi ni hi mi ri'.split(),
     u = 'u ku su tsu nu fu mu yu ru'.split(),
     e = 'e ke se te ne he me re'.split(),
