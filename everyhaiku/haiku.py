@@ -70,8 +70,8 @@ class HaikuGen(object):
                 'en': verse_en}
 
     def format(self, haiku):
-        ja, en = haiku['ja'], haiku['en']
-        return '\n'.join( [''.join(ja)] + en )
+        return '\n'.join(ja.ljust(8, u'\u3000') + en
+                         for ja, en in zip(haiku['ja'], haiku['en']))
 
 def main():
     gen = HaikuGen()
