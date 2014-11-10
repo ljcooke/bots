@@ -22,20 +22,20 @@ try:
 except ImportError:
     post_tweet = None
 
-KANA_MAP = dict(
-    a = u'あかさたなはまやらわ',
-    i = u'いきしちにひみり',
-    u = u'うくすつぬふむゆる',
-    e = u'えけせてねへめれ',
-    o = u'おこそとのほもよろを',
-)
-ROMAJI_MAP = dict(
-    a = 'a ka sa ta na ha ma ya ra wa'.split(),
-    i = 'i ki shi chi ni hi mi ri'.split(),
-    u = 'u ku su tsu nu fu mu yu ru'.split(),
-    e = 'e ke se te ne he me re'.split(),
-    o = 'o ko so to no ho mo yo ro wo'.split(),
-)
+KANA_MAP = {
+    'a': u'あかさたなはまやらわ' * 2 + u'がざだばぱ',
+    'i': u'いきしちにひみり' * 2 + u'ぎじびぴ',
+    'u': u'うくすつぬふむゆる' * 2 + u'ぐずぶぷ',
+    'e': u'えけせてねへめれ' * 2 + u'げぜでべぺ',
+    'o': u'おこそとのほもよろを' * 2 + u'ごぞどぼぽ',
+}
+ROMAJI_MAP = {
+    'a': 'a ka sa ta na ha ma ya ra wa'.split() * 2 + 'ga za da ba pa'.split(),
+    'i': 'i ki shi chi ni hi mi ri'.split() * 2 + 'gi ji bi pi'.split(),
+    'u': 'u ku su tsu nu fu mu yu ru'.split() * 2 + 'gu zu bu pu'.split(),
+    'e': 'e ke se te ne he me re'.split() * 2 + 'ge ze de be pe'.split(),
+    'o': 'o ko so to no ho mo yo ro wo'.split() * 2 + 'go zo do bo po'.split(),
+}
 
 class HaikuGen(object):
 
