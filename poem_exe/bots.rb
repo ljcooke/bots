@@ -7,7 +7,8 @@ require_relative 'poem'
 
 AUTH_FILENAME = 'auth.twitter.json'
 TWEET_CHANCE = 0...7
-MAX_PASSED_TWEETS = 10
+MIN_PASSED_TWEETS = 3
+MAX_PASSED_TWEETS = 15
 
 module PoemExe
   class Bot
@@ -25,11 +26,11 @@ module PoemExe
       bot.oauth_token_secret = auth[:token_secret]
 
       bot.on_startup do
-        if ARGV.include?('tweet') or rand(TWEET_CHANCE) == 0
+        if ARGV.include?('tweet')
           tweet_poem
         else
-          test_haiku = [@poet.make_poem(:single_line => true)]
-          @bot.log "Testing: #{test_haiku}"
+          test_haiku = @poet.make_poem(:single_line => true)
+          @bot.log "Testing: #{test_haiku.inspect}"
         end
       end
 
@@ -37,12 +38,14 @@ module PoemExe
         if @poet.load_model
           @bot.log "Reloaded #{model_name}"
         end
-        if @passed_tweets >= MAX_PASSED_TWEETS or rand(TWEET_CHANCE) == 0
+        can_tweet = (@passed_tweets >= MIN_PASSED_TWEETS)
+        should_tweet = (@passed_tweets >= MAX_PASSED_TWEETS or rand(TWEET_CHANCE) == 0)
+        if can_tweet and should_tweet
           tweet_poem
           @passed_tweets = 0
         else
           @passed_tweets += 1
-          @bot.log("Passed #{@passed_tweets} chances to tweet") if @passed_tweets % 3 == 0
+          @bot.log("Passed #{@passed_tweets} chances to tweet") if @passed_tweets % 5 == 0
         end
       end
     end
