@@ -31,6 +31,8 @@ ALT_FORMS = [
 # accepted unless the poem also contained a STRONG reference to autumn-spring.
 #------------------------------------------------------------------------------
 
+ALWAYS_IN_SEASON = /snail/
+
 SEASON_STRONG_MATCH = [
   /summer|winte?r|solsti[ct]/,
   /autumn|spring|equino[xc]/,
@@ -89,7 +91,7 @@ MONTH_WEAK_MATCH = [
   /\b(september|equino[xc])/,
   /\b(october|hallowe.?en|pumpkin|thanksgiving)/,
   /\b(november|thanksgiving)/,
-  /\b(december|bells|carol|festive|jingl|joll|joy|merry|solsti[ct]|tree|twinkl)/,
+  /\b(december|bells|carol|festive|gift|jingl|joll|joy|merry|solsti[ct]|tree|twinkl)/,
 ]
 
 #------------------------------------------------------------------------------
@@ -158,7 +160,7 @@ module PoemExe
 
     def timely?(poem, month)
       text = poem.downcase
-      strong = false
+      strong = ALWAYS_IN_SEASON.match(text)
 
       # check some tricky STRONG references
       if /\bnew.?year/.match(text)
