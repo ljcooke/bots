@@ -2,5 +2,5 @@
 
 corpus:
 	mkdir -p corpus
-	python convert_haiku.py
+	python convert_haiku.py haiku/
 	ruby test_corpus.rb

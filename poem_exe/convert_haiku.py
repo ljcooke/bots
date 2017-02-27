@@ -1,3 +1,4 @@
+#!/usr/bin/env python2.7
 # coding: utf-8
 """
 Convert one or more haiku text files to a JSON list of minimal tweet objects,
@@ -7,9 +8,12 @@ Haiku in the text file must be separated by an empty line. The # character can
 be used to add comments.
 
 """
+import argparse
 import codecs
 import json
+import os
 import re
+import sys
 from glob import glob
 
 INPUT_GLOB = 'haiku/*.txt'
@@ -37,58 +41,90 @@ REPLACE = (
 )
 
 output_haiku = []
+output_texts = []
 
-for fn in glob(INPUT_GLOB):
-    print 'Reading', fn
-    input_lines = None
-    with codecs.open(fn, encoding='utf-8') as fp:
-        input_lines = fp.readlines()
+def parse_credit(line):
+    line = line.strip()
+    return line[2:].lstrip() if line.startswith('//') else None
 
-    # strip trailing whitespace and comments
-    input_lines = (line.split('#', 1)[0].strip()
-                   for line in input_lines
-                   if not line.lstrip().startswith('#'))
+def convert_dirs(dirs):
 
-    # select all unique haiku, joining adjacent lines to form haiku strings
-    unique_haiku = set()
-    for haiku in '\n'.join(input_lines).split('\n\n'):
-        haiku = haiku.strip().lower()
-        if RE_CONTAINS_URL.search(haiku):
-            raise ValueError, 'haiku includes a url: %s' % repr(haiku)
-        elif RE_WEAK_LINE.search(haiku):
-            raise ValueError, 'haiku contains a weak line: %s' % repr(haiku)
-        for regex, repl in REPLACE:
-            haiku = regex.sub(repl, haiku)
-        if haiku:
-            unique_haiku.add(haiku)
-    print '    %d unique haiku' % len(unique_haiku)
+    for dirname in dirs:
+        for fn in glob(os.path.join(dirname, '*.txt')):
+            print 'Reading', fn
+            input_lines = None
+            with codecs.open(fn, encoding='utf-8') as fp:
+                input_lines = fp.readlines()
 
-    # separate the lines into first, middle, and last buckets
-    for haiku in unique_haiku:
-        haiku_lines = haiku.split('\n')
-        line_count = len(haiku_lines)
-        output_lines = []
-        buckets = [[], [], []]
-        for i, line in enumerate(haiku_lines):
-            bucket = 0 if i == 0 else (2 if i == line_count - 1 else 1)
-            tokens = line.split()
-            if not tokens:
-                continue
-            line = ' '.join(tokens)
-            output_lines.append(line)
-            buckets[bucket].append(line)
-        if output_lines:
-            output_haiku.append({
-                'text': ' / '.join(output_lines),
-                'lines': tuple(output_lines),
-                'intro': tuple(buckets[0]),
-                'middle': tuple(buckets[1]),
-                'outro': tuple(buckets[2]),
-            })
+            # find a credit line for the file, if one exists
+            file_credit = parse_credit(input_lines[0])
+            if file_credit:
+                input_lines.pop(0)
 
-print 'Writing', OUTPUT_FILENAME
-with codecs.open(OUTPUT_FILENAME, 'w', encoding='utf-8') as fp:
-    json.dump(sorted(output_haiku), fp, indent=2)
+            # strip trailing whitespace and comments
+            input_lines = (line.split('#', 1)[0].strip()
+                        for line in input_lines
+                        if not line.lstrip().startswith('#'))
 
-maxlen = max(len(h['text']) for h in output_haiku)
-print 'Wrote {} haiku with maximum length {}'.format(len(output_haiku), maxlen)
+            # select all unique haiku, joining adjacent lines to form haiku strings
+            unique_haiku = set()
+            for haiku in '\n'.join(input_lines).split('\n\n'):
+                haiku = haiku.strip().lower()
+                if RE_CONTAINS_URL.search(haiku):
+                    raise ValueError, 'haiku includes a url: %s' % repr(haiku)
+                elif RE_WEAK_LINE.search(haiku):
+                    raise ValueError, 'haiku contains a weak line: %s' % repr(haiku)
+                for regex, repl in REPLACE:
+                    haiku = regex.sub(repl, haiku)
+                if haiku:
+                    unique_haiku.add(haiku)
+            print '    %d unique haiku' % len(unique_haiku)
+
+            # separate the lines into first, middle, and last buckets
+            for haiku in unique_haiku:
+                haiku_lines = haiku.split('\n')
+                credit = file_credit
+                line_count = len(haiku_lines)
+                output_lines = []
+                buckets = [[], [], []]
+                for i, line in enumerate(haiku_lines):
+                    bucket = 0 if i == 0 else (2 if i == line_count - 1 else 1)
+                    tokens = line.split()
+                    if not tokens:
+                        continue
+                    line = ' '.join(tokens)
+                    output_lines.append(line)
+                    buckets[bucket].append(line)
+                if output_lines:
+                    obj = {
+                        #'text': ' / '.join(output_lines),
+                        #'lines': tuple(output_lines),
+                        'a': tuple(buckets[0]),
+                        'b': tuple(buckets[1]),
+                        'c': tuple(buckets[2]),
+                    }
+                    if credit:
+                        obj['source'] = credit
+                    output_haiku.append(obj)
+                    output_texts.append(' / '.join(output_lines))
+
+    print 'Writing', OUTPUT_FILENAME
+    with codecs.open(OUTPUT_FILENAME, 'w', encoding='utf-8') as fp:
+        json.dump(sorted(output_haiku), fp, indent=2, sort_keys=True, ensure_ascii=False)
+
+    maxlen = max(len(text) for text in output_texts)
+    print 'Wrote {} haiku with maximum length {}'.format(len(output_haiku), maxlen)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('srcdir', nargs='*')
+    args = parser.parse_args()
+
+    if not args.srcdir:
+        parser.print_help()
+        return 1
+
+    convert_dirs(args.srcdir)
+
+if __name__ == '__main__':
+    sys.exit(main())
