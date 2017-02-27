@@ -11,6 +11,7 @@ from string import ascii_uppercase as UPPERCASE
 
 from queneau import WordAssembler
 from tweet import post_tweet
+from wordfilter import Wordfilter
 
 CORPUS_FILENAME = 'corpus.json'
 
@@ -66,7 +67,15 @@ def botechre(times=1):
         return
 
     assembler = BotechreAssembler(corpus)
-    return [random_title(assembler) for _ in range(times)]
+    wordfilter = Wordfilter()
+    max_times = times * 10
+
+    for i in range(max_times):
+        title = random_title(assembler)
+        if not wordfilter.blacklisted(title):
+            yield title
+            if times <= i:
+                break
 
 def main():
     ap = argparse.ArgumentParser()
@@ -74,7 +83,7 @@ def main():
     args = ap.parse_args()
 
     if args.tweet:
-        titles = botechre()
+        titles = tuple(botechre())
         if titles:
             post_tweet(titles[0])
     else:

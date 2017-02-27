@@ -21,8 +21,9 @@ Getting started
 
 You'll need the following:
 
-  * [Python 2][python]
-  * The *queneau.py* file from [olipy][]
+  * [Python][python] (either 2 or 3)
+  * The *queneau.py* file from Leonard Richardson's [olipy][]
+  * Darius Kazemi's [wordfilter][]
   * A *data* directory with one or more text files
 
 The text files should have one entry per line. Run *build.py* once to read the
@@ -32,3 +33,4 @@ files in the *data* directory and generate the file *corpus.json*.
 [botechre]: https://twitter.com/botechre
 [python]: https://www.python.org/downloads/
 [olipy]: https://github.com/leonardr/olipy
+[wordfilter]: https://github.com/dariusk/wordfilter
