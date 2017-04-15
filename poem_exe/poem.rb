@@ -6,7 +6,7 @@
 # live:     2014-06-21 01:47 +01:00
 # twitter:  twitter.com/poem_exe
 # tumblr:   poemexe.tumblr.com
-# license:  CC BY-NC-ND 4.0
+# license:  MIT License
 #------------------------------------------------------------------------------
 
 require 'json'
